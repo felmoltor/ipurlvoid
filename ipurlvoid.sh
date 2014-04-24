@@ -6,6 +6,10 @@
 # = @License: GPLv3
 # =========================
 
+# TODO: If we detect an URL, transform also to and IP and check also with ipvoid.com
+# TODO: If we detect an IP, do a reverse lookup and also check with urlvoid.com
+# TODO: If we detect subdomains, split in multiple domains and check with urlvoid.com. For example: if we have news.local.paper.es, analyce paper.es, local.paper.es and news.local.paper.es
+
 OUTPUTDIR="results"
 HTMLDIR="$OUTPUTDIR/html"
 
