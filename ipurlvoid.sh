@@ -9,9 +9,11 @@
 # TODO: If we detect an URL, transform also to and IP and check also with ipvoid.com
 # TODO: If we detect an IP, do a reverse lookup and also check with urlvoid.com
 # TODO: If we detect subdomains, split in multiple domains and check with urlvoid.com. For example: if we have news.local.paper.es, analyce paper.es, local.paper.es and news.local.paper.es
+# TODO: Add queries to urlquery.net API. 
 
 OUTPUTDIR="results"
 HTMLDIR="$OUTPUTDIR/html"
+CHECKRELATEDIPS=1
 
 # Check arguments
 if [ ! $1 ]; then
@@ -57,42 +59,98 @@ function isValidIP()
 
 # =======================
 
-function request {
-		
-	target=$1
-    nlbk=0
-    blacklisted=0
-	echo -n "$target;" >> $OUTPUTDIR/$resultfile
+function toIPList()
+{
+    local domain=$1
+    local iplist=$(dig +short $domain a)
+    
+    echo $iplist
+}
 
-    isValidIP $target
-    valid_ip=$?
-    if [[ $valid_ip == 0 ]];then
-        echo "This is an IP, asking to ipvoid.com"
-        curl -s -L -o $HTMLDIR/$target.ipvoid.html -k --data "ip=$target" http://www.ipvoid.com 
-        # Dos opciones para la salida
-        # <tr><td>Blacklist Status</td><td><span class="label label-danger">BLACKLISTED 6/37</span></td></tr>
-        # <tr><td>Blacklist Status</td><td><span class="label label-success">POSSIBLY SAFE 0/37</span></td></tr>
-        blacklisted=$(grep -o -E "<span class=\"label label-danger\">BLACKLISTED [[:digit:]]+\/[[:digit:]]+</span>" $HTMLDIR/$target.ipvoid.html | wc -l)
-        nblk=$(grep -o -E "<span class=\"label label-danger\">BLACKLISTED [[:digit:]]+\/[[:digit:]]+</span>" $HTMLDIR/$target.ipvoid.html | grep -o -E "[[:digit:]]+\/[[:digit:]]+")
-    else
-        echo "This is not an IP, asking to urlvoid.com"
-        curl -s -L -o $HTMLDIR/$target.urlvoid.html -k --data "url=$target&go=" http://www.urlvoid.com
-        # <span class="label label-success">0/25</span></td></tr>
-        # <span class="label label-danger">.*</span></td></tr>
-        blacklisted=$(grep -o -E "<span class=\"label label-danger\">.*</span>" $HTMLDIR/$target.urlvoid.html | wc -l)
+# ====================
+
+function queryIP()
+{
+    local ip=$1
+    local nblk=0
+
+    curl -s -L -o $HTMLDIR/$ip.ipvoid.html -k --data "ip=$ip" http://www.ipvoid.com 
+    # Dos opciones para la salida
+    # <tr><td>Blacklist Status</td><td><span class="label label-danger">BLACKLISTED 6/37</span></td></tr>
+    # <tr><td>Blacklist Status</td><td><span class="label label-success">POSSIBLY SAFE 0/37</span></td></tr>
+    blacklisted=$(grep -o -E "<span class=\"label label-danger\">BLACKLISTED [[:digit:]]+\/[[:digit:]]+</span>" $HTMLDIR/$ip.ipvoid.html | wc -l)
+    if  [[ $blacklisted != 0 ]];then
+        nblk=$(grep -o -E "<span class=\"label label-danger\">BLACKLISTED [[:digit:]]+\/[[:digit:]]+</span>" $HTMLDIR/$ip.ipvoid.html | grep -o -E "[[:digit:]]+\/[[:digit:]]+")
+    fi
+
+    echo "$ip:$blacklisted:$nblk"
+}
+
+# ======================
+
+function queryDomain()
+{
+    local domain=$1
+    local nblk=0
+
+    curl -s -L -o $HTMLDIR/$target.urlvoid.html -k --data "url=$target&go=" http://www.urlvoid.com
+    # <span class="label label-success">0/25</span></td></tr>
+    # <span class="label label-danger">.*</span></td></tr>
+    blacklisted=$(grep -o -E "<span class=\"label label-danger\">.*</span>" $HTMLDIR/$target.urlvoid.html | wc -l)
+    if [[ $blacklisted != 0 ]];then
         nblk=$(grep -o -E "<span class=\"label label-danger\">.*</span>" $HTMLDIR/$target.urlvoid.html | grep -o -E "[[:digit:]]+\/[[:digit:]]+")
     fi
 
+    echo "$domain:$blacklisted:$nblk"
+}
+
+# =======================
+
+function printHostStatus()
+{
+    local status=$1
+    local target=$( echo $status | cut -f1 -d: )
+    local blacklisted=$( echo $status | cut -f2 -d:)
+    local nblk=$( echo $status | cut -f3 -d:)
+
     # Check if blacklisted
     if [[ $blacklisted = 1 ]];then
-        echo
-        echo -e "\033[31m [BLACKLISTED] \033[0m $nblk detected this IP/URL as a threat." 
-        echo "BLACKLISTED ($nblk)" >> $OUTPUTDIR/$resultfile
+        echo -e "$target:\033[31m [BLACKLISTED] \033[0m ($nblk detected this IP/URL as a threat)" 
+        echo "$target;BLACKLISTED ($nblk)" >> $OUTPUTDIR/$resultfile
     else
-        echo
-        echo -e "\033[32m [PROBABLY CLEAN] \033[0m It seems this IP/URL is not a threat."
-        echo "PROBABLY CLEAN" >> $OUTPUTDIR/$resultfile
+        echo -e "$target:\033[32m [PROBABLY CLEAN] \033[0m (It seems this IP/URL is not a threat)"
+        echo "$target;PROBABLY CLEAN" >> $OUTPUTDIR/$resultfile
     fi
+}
+
+# =======================
+
+function request {
+		
+	local target=$1
+	local status="$1:0:0"
+  
+    echo 
+    isValidIP $target
+    valid_ip=$?
+    if [[ $valid_ip == 0 ]];then
+        echo "Inspecting IP address $target..."
+        status=$( queryIP $target )
+        printHostStatus $status
+    else
+        echo "Ispecting domain $target"
+        status=$( queryDomain $target )
+        printHostStatus $status
+        if [[ $CHECKRELATEDIPS == 1 ]];then
+            iplist=$( toIPList $target )
+            for relatedip in $iplist; do
+                echo "Inspecting related IP address(es) of domain $target: $relatedip..."
+                status=$( queryIP $relatedip )
+                printHostStatus $status
+            done
+        fi
+    fi
+    
 }
 
 # ==========================
@@ -116,18 +174,15 @@ if [ -f "$1" ] ; then
 	((i=1))
 	while ((i=i)); do
 		KEYWORD=$(echo $LIST | cut -d ' ' -f$i)
-		
 		if [ ! $KEYWORD ]; then
 			break;
 		fi
-		echo "Asking to ipvoid.com for '$KEYWORD'. Please, wait..."
 		request $KEYWORD
 		echo  
 		((i++))
 	done
 else
 	KEYWORD=$1
-	echo "Asking to ipvoid.com for '$KEYWORD'. Please, wait..."
 	request $KEYWORD	
 	echo
 fi
@@ -137,7 +192,7 @@ if [[ $isWindows -eq 1 ]]
 then
     # Es un Sistema Operativo Windows con Cygwin
     # Abrimos con explorer
-	echo "Abrimos $OUTPUTDIR\\$resultfile"
+	echo "Opening $OUTPUTDIR\\$resultfile"
     explorer "$OUTPUTDIR\\$resultfile"
 else
     # Es un Sistema Operativo Linux
