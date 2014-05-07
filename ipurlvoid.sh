@@ -112,13 +112,21 @@ function printHostStatus()
     local target=$( echo $status | cut -f1 -d: )
     local blacklisted=$( echo $status | cut -f2 -d:)
     local nblk=$( echo $status | cut -f3 -d:)
+    local type=$2
+    local url=""
+
+    if [[ $type == "ip" ]];then
+        url="http://www.ipvoid.com/scan/$target"
+    else
+        url="http://www.urlvoid.com/scan/$target"
+    fi
 
     # Check if blacklisted
     if [[ $blacklisted = 1 ]];then
-        echo -e "$target:\033[31m [BLACKLISTED] \033[0m ($nblk detected this IP/URL as a threat)" 
+        echo -e "$target:\033[31m [BLACKLISTED] \033[0m ($nblk detected this IP/URL as a threat, $url)" 
         echo "$target;BLACKLISTED ($nblk)" >> $OUTPUTDIR/$resultfile
     else
-        echo -e "$target:\033[32m [PROBABLY CLEAN] \033[0m (It seems this IP/URL is not a threat)"
+        echo -e "$target:\033[32m [PROBABLY CLEAN] \033[0m (It seems this IP/URL is not a threat, $url)"
         echo "$target;PROBABLY CLEAN" >> $OUTPUTDIR/$resultfile
     fi
 }
@@ -135,17 +143,17 @@ function request {
     valid_ip=$?
     if [[ $valid_ip == 0 ]];then
         echo "Inspecting IP address $target..."
-        status=$( queryIP $target )
+        status=$( queryIP $target "ip" )
         printHostStatus $status
     else
         echo "Ispecting domain $target"
-        status=$( queryDomain $target )
+        status=$( queryDomain $target "domain" )
         printHostStatus $status
         if [[ $CHECKRELATEDIPS == 1 ]];then
             iplist=$( toIPList $target )
             for relatedip in $iplist; do
                 echo "Inspecting related IP address(es) of domain $target: $relatedip..."
-                status=$( queryIP $relatedip )
+                status=$( queryIP $relatedip "ip" )
                 printHostStatus $status
             done
         fi
