@@ -162,6 +162,47 @@ function request {
 }
 
 # ==========================
+
+function getSystemEditor()
+{
+    local editors="vim emacs nano pico leafpad jed gedit tea gvim kate"
+    local firstpath=""
+
+    ed=$( echo $EDITOR )
+    if [[ "$ed" != "" ]];then
+        paths=$( whereis $ed | cut -f2 -d:)
+        firstpath=$( echo $paths | cut -f1 -d' ' )
+    else
+        for editor in $editors; do
+            paths=$( whereis $editor | cut -f2 -d:)
+            firstpath=$( echo $paths | cut -f1 -d' ' )
+            if [[ "$firstpath" != "" ]];then
+                break
+            fi
+        done
+    fi
+
+    echo $firstpath
+}
+
+# ==========================
+
+function getSystemBrowser()
+{
+    local browsers="firefox chromium chrome google-chrome iceweasel lynx w3m"
+    local firstpath=""
+
+    for browser in $browsers; do
+        paths=$( whereis $browser | cut -f2 -d:)
+        firstpath=$( echo $paths | cut -f1 -d' ' )
+        if [[ "$firstpath" != "" ]];then
+            break
+        fi
+    done
+    echo $firstpath
+}
+
+# ==========================
 # ========= MAIN ===========
 # ==========================
 
@@ -200,24 +241,22 @@ if [[ $isWindows -eq 1 ]]
 then
     # Es un Sistema Operativo Windows con Cygwin
     # Abrimos con explorer
-	echo "Opening $OUTPUTDIR\\$resultfile"
+    echo "Opening $OUTPUTDIR\\$resultfile"
     explorer "$OUTPUTDIR\\$resultfile"
 else
     # Es un Sistema Operativo Linux
-    # Display result using w3m
-    if [ -f /usr/bin/w3m ]; then
-        w3m $OUTPUTDIR/$resultfile 2> /dev/null
+    editor=$( getSystemEditor )
+    if [[ -f $editor ]];then
+        $editor $OUTPUTDIR/$resultfile 2> /dev/null
     else
-        if [ -f /usr/bin/firefox ]; then
-            firefox $OUTPUTDIR/$resultfile 2> /dev/null
-            else
-            if [ -f /usr/bin/google-chrome ]; then
-                google-chrome $OUTPUTDIR/$resultfile 2> /dev/null
-                else
-                echo -e "No se encuentra un navegador web instalado.\nAbre el fichero $resultfile con un navegador para ver los resultados"
-            fi
-        fi
+        echo -e "No se encuentra un navegador web instalado.\nAbre el fichero $resultfile con un navegador para ver los resultados"
     fi
+#    brw=$( getSystemBrowser )
+#    if [[ -f $brw ]];then
+#        $brw $HTMLDIR/$resultfile 2> /dev/null
+#    else
+#        echo -e "No se encuentra un navegador web instalado.\nAbre el fichero $resultfile con un navegador para ver los resultados"
+#    fi
 fi
 
 
