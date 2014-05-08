@@ -192,13 +192,21 @@ function getSystemBrowser()
     local browsers="firefox chromium chrome google-chrome iceweasel lynx w3m"
     local firstpath=""
 
-    for browser in $browsers; do
+    browser=$( echo $BROWSER )
+
+    if [[ "$browser" != "" ]];then
         paths=$( whereis $browser | cut -f2 -d:)
         firstpath=$( echo $paths | cut -f1 -d' ' )
-        if [[ "$firstpath" != "" ]];then
-            break
-        fi
-    done
+    else
+        for browser in $browsers; do
+            paths=$( whereis $browser | cut -f2 -d:)
+            firstpath=$( echo $paths | cut -f1 -d' ' )
+            if [[ "$firstpath" != "" ]];then
+                break
+            fi
+        done
+    fi
+
     echo $firstpath
 }
 
@@ -251,12 +259,6 @@ else
     else
         echo -e "No se encuentra un navegador web instalado.\nAbre el fichero $resultfile con un navegador para ver los resultados"
     fi
-#    brw=$( getSystemBrowser )
-#    if [[ -f $brw ]];then
-#        $brw $HTMLDIR/$resultfile 2> /dev/null
-#    else
-#        echo -e "No se encuentra un navegador web instalado.\nAbre el fichero $resultfile con un navegador para ver los resultados"
-#    fi
 fi
 
 
